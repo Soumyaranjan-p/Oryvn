@@ -1,0 +1,31 @@
+{
+  "productName": "Oryvn",
+  "version": "0.1.0",
+  "identifier": "com.oryvn.app",
+  "build": {
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Oryvn",
+        "url": "/",
+        "width": 900,
+        "height": 700,
+        "resizable": true,
+        "visible": false,
+        "skipTaskbar": false,
+        "alwaysOnTop": false,
+        "decorations": true,
+        "transparent": false,
+        "shadow": true,
+        "focus": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  }
+}

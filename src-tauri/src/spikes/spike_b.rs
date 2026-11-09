@@ -90,8 +90,9 @@ pub fn spike_b_setup(app: AppHandle) -> std::result::Result<Vec<DockPlacement>, 
 }
 
 unsafe fn create_listener_window() -> WinResult<HWND> {
-    let hinstance: HINSTANCE =
-        HINSTANCE(windows::Win32::System::LibraryLoader::GetModuleHandleW(None)?.0);
+    let hinstance = HINSTANCE(
+        windows::Win32::System::LibraryLoader::GetModuleHandleW(None)?.0,
+    );
     let class_name: Vec<u16> = LISTENER_CLASS.encode_utf16().collect();
     let wc = WNDCLASSW {
         lpfnWndProc: Some(listener_wndproc),
@@ -99,22 +100,24 @@ unsafe fn create_listener_window() -> WinResult<HWND> {
         lpszClassName: PCWSTR::from_raw(class_name.as_ptr()),
         ..Default::default()
     };
-    let _ = RegisterClassW(&wc);
-    let hwnd = CreateWindowExW(
-        WINDOW_EX_STYLE::default(),
-        PCWSTR::from_raw(class_name.as_ptr()),
-        PCWSTR::null(),
-        WINDOW_STYLE::default(),
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        CW_USEDEFAULT,
-        Some(HWND_MESSAGE),
-        None,
-        Some(hinstance),
-        None,
-    );
-    hwnd
+    let _ = unsafe { RegisterClassW(&wc) };
+    let hwnd = unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE::default(),
+            PCWSTR::from_raw(class_name.as_ptr()),
+            PCWSTR::null(),
+            WINDOW_STYLE::default(),
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            CW_USEDEFAULT,
+            Some(HWND_MESSAGE),
+            None,
+            Some(hinstance),
+            None,
+        )
+    }?;
+    Ok(hwnd)
 }
 
 fn run_listener_loop(hwnd: HWND, _app: AppHandle) {
@@ -134,7 +137,7 @@ fn run_listener_loop(hwnd: HWND, _app: AppHandle) {
     }
 }
 
-unsafe extern "system" fn listener_wndproc(
+extern "system" fn listener_wndproc(
     hwnd: HWND,
     msg: u32,
     wparam: WPARAM,
@@ -146,7 +149,7 @@ unsafe extern "system" fn listener_wndproc(
                 "WM_DISPLAYCHANGE received (wparam={:?}, lparam={:?})",
                 wparam, lparam
             );
-            let _ = PostMessageW(Some(hwnd), WM_USER_REENUMERATE, WPARAM(0), LPARAM(0));
+            let _ = unsafe { PostMessageW(Some(hwnd), WM_USER_REENUMERATE, WPARAM(0), LPARAM(0)) };
             LRESULT(0)
         }
         WM_USER_REENUMERATE => {
@@ -154,6 +157,6 @@ unsafe extern "system" fn listener_wndproc(
             let _ = enumerate_monitors();
             LRESULT(0)
         }
-        _ => DefWindowProcW(hwnd, msg, wparam, lparam),
+        _ => unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) },
     }
 }

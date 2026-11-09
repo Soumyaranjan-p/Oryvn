@@ -1,17 +1,25 @@
-use tauri::generate_context;
+use tauri::{generate_context, Manager, State};
 use tracing_subscriber::prelude::*;
 
 mod brand;
 mod commands;
 mod config;
+mod dock_host;
+mod dock_model;
+mod icons;
+mod launcher;
 mod monitor;
 mod spikes;
+mod tray;
+mod appbar;
+mod autohide;
+mod windows_tracker;
 
 fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
     let app_data = std::env::var("APPDATA").map_err(|_| "APPDATA not set")?;
-    let app_dir = std::path::Path::new(&app_data).join(brand::APP_NAME);
-    std::fs::create_dir_all(app_dir.join("logs"))?;
-    let log_file = app_dir.join("logs").join("oryvn.log");
+    let log_dir = std::path::Path::new(&app_data).join(crate::brand::APP_NAME).join("logs");
+    std::fs::create_dir_all(&log_dir)?;
+    let log_file = log_dir.join("oryvn.log");
     let file = std::fs::File::create(log_file)?;
     tracing_subscriber::registry()
         .with(tracing_subscriber::EnvFilter::from_default_env())
@@ -26,20 +34,48 @@ fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
 
 fn main() {
     let _ = init_logging();
-    tracing::info!("{} starting", brand::APP_NAME);
+    tracing::info!("{} starting", crate::brand::APP_NAME);
 
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|_app, _argv, _cwd| {
             tracing::info!("second instance ignored");
         }))
+        .plugin(tauri_plugin_notification::init())
+        .manage(crate::dock_host::DockWindowHost::default())
         .invoke_handler(tauri::generate_handler![
-            spikes::spike_a::spike_a_create_dock,
-            spikes::spike_b::spike_b_setup,
-            spikes::spike_c::spike_c_toggle_autohide
+            // spikes (debug / throwaway)
+            crate::spikes::spike_a::spike_a_create_dock,
+            crate::spikes::spike_b::spike_b_setup,
+            crate::spikes::spike_e::spike_e_open_n_docks,
+            // phase 1 commands
+            crate::commands::dock_list,
+            crate::commands::dock_create,
+            crate::commands::dock_update,
+            crate::commands::dock_delete,
+            crate::commands::dock_duplicate,
+            crate::commands::dock_items,
+            crate::commands::item_add,
+            crate::commands::item_remove,
+            crate::commands::item_reorder,
+            crate::commands::item_extract_icon,
+            crate::commands::app_launch,
+            crate::commands::apps_running,
+            crate::commands::config_get,
+            crate::commands::config_save,
+            crate::commands::config_reset,
+            crate::dock_host::dock_host_open,
+            crate::dock_host::dock_host_close,
+            crate::dock_host::dock_host_list_open,
+            // autohide + appbar (phase 1 native)
+            crate::autohide::autohide_toggle,
+            crate::appbar::register_bottom_appbar,
+            crate::appbar::remove_appbar,
         ])
         .setup(|app| {
-            tracing::info!("{} setup complete", brand::APP_NAME);
-            let _ = app;
+            tracing::info!("{} setup complete", crate::brand::APP_NAME);
+            // Startup cleanup: remove any stale appbars from a previous crash.
+            let _ = crate::appbar::startup_cleanup();
+            let _ = crate::tray::setup_tray(app);
             Ok(())
         })
         .run(generate_context!())

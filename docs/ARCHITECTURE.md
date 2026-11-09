@@ -15,36 +15,74 @@
 - **React owns only rendering:** dock UI, animations, settings window, themes.
 - **Frontend talks to Rust via Tauri commands and events only.** Typed command/event contracts live in one file on each side: `src-tauri/src/commands.rs` (Rust) and `src/tauri.ts` (TS). No direct FFI from JS.
 
-## Window model
-- One dock = one small Tauri window sized to the dock (never full-screen overlays). Docks created lazily. Settings window created only when opened, destroyed on close.
+## Phase 1 module boundaries
+
+### Data model (pure, decoupled from windows)
+- `src-tauri/src/dock_model.rs` — `DockConfig`, `DockItem`, `ItemType`, `AppConfig`. Pure data, no window references.
+- `src-tauri/src/config.rs` — `AppConfig` load/save/migrations/atomic write to `%APPDATA%\Oryvn\config.json`.
+
+### DockWindowHost layer
+- `src-tauri/src/dock_host.rs` — `DockWindowHost`: owns a `HashMap<String, WebviewWindow>` mapping dock id → Tauri window. Creates dock windows lazily (`decorations:false, transparent:true, shadow:false, skipTaskbar:true, alwaysOnTop:true, focus:false` + `WS_EX_TOOLWINDOW|WS_EX_NOACTIVATE`). Destroys on dock delete. Each dock window loads `/?dock=<id>`.
+- The host is the ONLY place that creates/destroys dock windows. Commands delegate to it.
+
+### Native services
+- `src-tauri/src/monitor.rs` — monitor enumeration + `GetDpiForMonitor` (MDT_EFFECTIVE_DPI) scale factors.
+- `src-tauri/src/icons.rs` — `SHGetFileInfo` / `IShellItemImageFactory` extraction, disk cache keyed by path+mtime, asset URLs to frontend.
+- `src-tauri/src/launcher.rs` — `ShellExecuteEx` for apps/folders/URLs, `CreateProcess` for scripts with args.
+- `src-tauri/src/windows_tracker.rs` — `EnumWindows` + process queries for running-app tracking; group multiple windows per app.
+- `src-tauri/src/appbar.rs` — `SHAppBarMessage` wrapping (ABM_NEW/QUERYPOS/SETPOS/REMOVE), dedicated appbar window per edge.
+- `src-tauri/src/autohide.rs` — cursor polling thread (30–50 ms) with edge trigger zone, show/hide delay, `set_ignore_cursor_events`.
+- `src-tauri/src/tray.rs` — tray icon + menu (new dock, settings, pause all, quit).
+- `src-tauri/src/notify_pipe.rs` — named pipe `\\.\pipe\oryvn` notification endpoint (Phase 3).
+
+### Commands / events
+- `src-tauri/src/commands.rs` — all Tauri command handlers (dock CRUD, item CRUD, launch, etc.).
+- `src/tauri.ts` — typed TS contracts mirroring the Rust side.
+
+### Frontend
+- `src/components/Dock.tsx` — renders inside a dock window (`/?dock=<id>`): items, hover magnification, tooltip labels.
+- `src/components/DockItem.tsx` — single item: icon, label, drag handle, context menu.
+- `src/components/Settings.tsx` — settings window (lazy, destroyed on close): dock list, per-dock editor, live preview, theme editor.
+- `src/App.tsx` — main (invisible) window; entry point for spikes/debug.
+
+## Window model (Phase 1)
+- One dock = one Tauri window sized to the dock. Created lazily by `DockWindowHost`.
 - Dock window flags: `decorations:false`, `transparent:true`, `shadow:false`, `skipTaskbar:true`, `alwaysOnTop:true`, `focus:false`.
-- Apply `WS_EX_TOOLWINDOW` and `WS_EX_NOACTIVATE` from Rust so docks never steal focus or appear in Alt+Tab.
-- Declare per-monitor DPI awareness v2 (manifest). All native geometry in physical pixels; convert via each monitor's scale factor.
-- Rounded corners, shadows, padding drawn in CSS inside the transparent window; leave shadow padding so nothing clips. `html`/`body` background transparent.
-- Animate only `transform` and `opacity`. No layout animation. Spring-style hover magnification via GPU-friendly transforms (`prefers-reduced-motion` respected).
+- `WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE` from Rust — never steals focus, never Alt+Tab/taskbar.
+- Per-monitor DPI: physical pixels, scale via `Monitor.to_physical`/`to_logical`.
+- Rounded corners, shadows, padding in CSS inside the transparent window; leave shadow padding. `html`/`body` transparent.
+- Animate only `transform` and `opacity`. Spring-style hover magnification via GPU-friendly transforms.
 
-## Per-phase layout (Phase 0 = risk spikes)
-Phase 0 lives under `spikes/` (throwaway / feature-flagged). Each spike A–E is verified independently, measured, then reported before Phase 1 begins.
-
-Phase 1+ module map (planned, not yet implemented):
-- `src-tauri/src/main.rs` — Tauri entry, single-instance, menu/tray
-- `src-tauri/src/brand.rs` — `APP_NAME` constant
-- `src-tauri/src/config.rs` — config load/save/migrations/atomic write
-- `src-tauri/src/monitor.rs` — monitor enumeration + DPI scale factors
-- `src-tauri/src/dock_window.rs` — per-dock Tauri window creation
-- `src-tauri/src/appbar.rs` — SHAppBarMessage wrapping
-- `src-tauri/src/autohide.rs` — cursor polling thread + edge trigger
-- `src-tauri/src/icons.rs` — SHGetFileInfo/IShellItemImageFactory extraction + disk cache
-- `src-tauri/src/launcher.rs` — app/folder/URL/script launching
-- `src-tauri/src/tray.rs` — tray icon + menu
-- `src-tauri/src/notify_pipe.rs` — named pipe notification endpoint
-- `src/tauri.ts` — typed TS command/event contracts
-- `src/components/Dock.tsx` — dock rendering + hover magnification
-- `src/components/Settings.tsx` — settings window
-- `src/brand.ts` — `APP_NAME` constant
+## Config model (Phase 1)
+```json
+{
+  "version": 1,
+  "docks": [
+    {
+      "id": "...",
+      "name": "Main",
+      "monitorId": "\\\\.\\DISPLAY1",
+      "edge": "bottom",
+      "x": 100, "y": 1040,
+      "iconSize": 32, "gap": 8, "scale": 1,
+      "theme": "dark",
+      "background": "solid",
+      "autoHide": false,
+      "collapseToButton": false,
+      "hideWhenFullscreen": false,
+      "orientation": "horizontal"
+    }
+  ],
+  "items": { "<dockId>": [ { "id": "...", "type": "app", "label": "VS Code", "path": "...", "order": 0 } ] }
+}
+```
 
 ## Quality bar
 - `cargo fmt`, `clippy -D warnings`, ESLint + Prettier, strict TypeScript.
 - Docks never steal focus, never in Alt+Tab/taskbar, survive explorer restart, sleep/resume, display changes, RDP.
 - Accessibility: keyboard nav inside dock, ARIA labels, high-contrast respect.
-- Tests: config migration, geometry/DPI conversion, workflow runner. Manual QA checklist in `docs/QA.md`.
+- Tests: config migration, geometry/DPI conversion, autohide state machine. Manual QA checklist in `docs/QA.md`.
+
+## Phase status
+- Phase 0: complete (conditional GO). Compile-verified; live A–D verification pending in QA.
+- Phase 1: in progress.

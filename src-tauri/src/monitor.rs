@@ -1,12 +1,18 @@
 //! Monitor enumeration, DPI scale factors, and stable monitor identity.
 //! All native geometry is in physical pixels; convert via each monitor's scale factor.
+//!
+//! Scale factor is obtained via `GetDpiForMonitor(hmonitor, MDT_EFFECTIVE_DPI, ...)`,
+//! which returns the effective DPI (accounts for per-monitor display scaling set by
+//! the user). Scale = dpi / 96.0. This is the recommended API for per-monitor DPI
+//! awareness on Windows 10 1607+ (our target: 22H2+), and is more correct than the
+//! legacy `CreateDCW` + `GetDeviceCaps(LOGPIXELSX)` approach on mixed-DPI systems.
 
 use serde::{Deserialize, Serialize};
 use windows::Win32::Foundation::{LPARAM, RECT};
 use windows::Win32::Graphics::Gdi::{
-    CreateDCW, DeleteDC, EnumDisplayMonitors, GetDeviceCaps, GetMonitorInfoW, HMONITOR, LOGPIXELSX,
-    MONITORINFO, MONITORINFOEXW,
+    EnumDisplayMonitors, GetMonitorInfoW, HDC, HMONITOR, MONITORINFO, MONITORINFOEXW,
 };
+use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::core::Result;
 
 /// Stable identity for a monitor: device name + physical bounds.
@@ -35,6 +41,8 @@ pub struct Monitor {
     pub identity: MonitorIdentity,
     /// DPI scale factor (e.g. 1.0, 1.25, 1.5, 2.0).
     pub scale: f64,
+    /// Effective DPI as reported by GetDpiForMonitor (e.g. 96, 120, 144, 192).
+    pub dpi: u32,
 }
 
 impl Monitor {
@@ -96,30 +104,23 @@ unsafe extern "system" fn monitor_enum_proc(
         is_primary,
     };
 
-    // Per-monitor DPI scale factor via a DC created for this specific monitor.
-    let scale = unsafe {
-        let wide: Vec<u16> = device_name.encode_utf16().collect();
-        let hdc = CreateDCW(
-            windows::core::PCWSTR::from_raw(wide.as_ptr()),
-            None,
-            None,
-            None,
-        );
-        let scale = if !hdc.is_invalid() {
-            let dpi_x = GetDeviceCaps(Some(hdc), LOGPIXELSX);
-            let _ = DeleteDC(hdc);
-            dpi_x as f64 / 96.0
-        } else {
-            1.0
-        };
-        scale
+    // Per-monitor effective DPI via GetDpiForMonitor (MDT_EFFECTIVE_DPI).
+    // Scale = dpi / 96.0. Falls back to 1.0 if the call fails.
+    let (dpi, scale) = unsafe {
+        let mut dpi_x: u32 = 0;
+        let mut dpi_y: u32 = 0;
+        match GetDpiForMonitor(hmonitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y) {
+            Ok(()) => {
+                let dpi = dpi_x.max(96);
+                (dpi, dpi as f64 / 96.0)
+            }
+            Err(_) => (96, 1.0),
+        }
     };
 
-    monitors.push(Monitor { identity, scale });
+    monitors.push(Monitor { identity, scale, dpi });
     windows::core::BOOL(1) // continue enumeration
 }
-
-type HDC = windows::Win32::Graphics::Gdi::HDC;
 
 #[cfg(test)]
 mod tests {
@@ -137,8 +138,10 @@ mod tests {
                 is_primary: true,
             },
             scale: 1.5,
+            dpi: 144,
         };
         assert_eq!(m.to_physical(100.0), 150.0);
         assert!((m.to_logical(150.0) - 100.0).abs() < f64::EPSILON);
+        assert_eq!(m.dpi, 144);
     }
 }

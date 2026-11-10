@@ -13,6 +13,7 @@ mod spikes;
 mod tray;
 mod appbar;
 mod autohide;
+mod window_styles;
 mod windows_tracker;
 
 fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
@@ -21,8 +22,12 @@ fn init_logging() -> Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir_all(&log_dir)?;
     let log_file = log_dir.join("oryvn.log");
     let file = std::fs::File::create(log_file)?;
+    // Default to INFO when RUST_LOG is unset — `EnvFilter::from_default_env()`
+    // silently falls back to ERROR-only, which produced an empty log.
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
     tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::from_default_env())
+        .with(filter)
         .with(
             tracing_subscriber::fmt::layer()
                 .with_target(false)
@@ -46,6 +51,7 @@ fn main() {
             // spikes (debug / throwaway)
             crate::spikes::spike_a::spike_a_create_dock,
             crate::spikes::spike_b::spike_b_setup,
+            #[cfg(debug_assertions)]
             crate::spikes::spike_e::spike_e_open_n_docks,
             // phase 1 commands
             crate::commands::dock_list,
@@ -75,7 +81,15 @@ fn main() {
             tracing::info!("{} setup complete", crate::brand::APP_NAME);
             // Startup cleanup: remove any stale appbars from a previous crash.
             let _ = crate::appbar::startup_cleanup();
+            // The main (hidden) window must never appear in Alt+Tab either.
+            if let Some(main_window) = app.get_webview_window("main") {
+                if let Ok(hwnd) = main_window.hwnd() {
+                    let _ = crate::window_styles::apply_dock_styles(hwnd);
+                }
+            }
             let _ = crate::tray::setup_tray(app);
+            crate::window_styles::apply_tool_style_to_helper_windows();
+            crate::window_styles::log_our_windows("startup");
             Ok(())
         })
         .run(generate_context!())

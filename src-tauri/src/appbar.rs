@@ -158,4 +158,23 @@ mod tests {
         assert_eq!(ABM_SETPOS, 4);
         assert_eq!(ABE_BOTTOM, 3);
     }
+
+    /// remove_appbar / startup_cleanup must be safe to call when no appbar is
+    /// registered (e.g. first launch, or after a crash left nothing behind).
+    /// Calling repeatedly must not panic and must not leak state.
+    #[test]
+    fn test_remove_appbar_safe_when_empty() {
+        // First call: no appbar registered, should be a no-op that returns Ok
+        let result = remove_appbar();
+        assert!(result.is_ok());
+
+        // Second call: still empty, should still be fine
+        let result = remove_appbar();
+        assert!(result.is_ok());
+
+        // startup_cleanup should also be safe
+        let result = startup_cleanup();
+        assert!(result.is_ok());
+    }
 }
+

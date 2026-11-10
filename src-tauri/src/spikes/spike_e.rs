@@ -27,7 +27,8 @@ pub fn spike_e_open_n_docks(app: AppHandle, count: u32) -> Result<Vec<String>, S
         .map_err(|e| e.to_string())?;
 
         let hwnd = _window.hwnd().map_err(|e| e.to_string())?;
-        apply_non_focus_styles(hwnd).map_err(|e| e.to_string())?;
+        crate::window_styles::apply_dock_styles(hwnd).map_err(|e| e.to_string())?;
+        crate::window_styles::schedule_style_reapply(_window.clone(), &label);
 
         tracing::info!("spike E opened dock {}", label);
         labels.push(label);

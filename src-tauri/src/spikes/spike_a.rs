@@ -46,7 +46,8 @@ pub fn spike_a_create_dock(app: AppHandle) -> Result<String, String> {
     .map_err(|e| e.to_string())?;
 
     let hwnd = window.hwnd().map_err(|e| e.to_string())?;
-    apply_non_focus_styles(hwnd).map_err(|e| e.to_string())?;
+    crate::window_styles::apply_dock_styles(hwnd).map_err(|e| e.to_string())?;
+    crate::window_styles::schedule_style_reapply(window.clone(), "dock-spike-a");
 
     tracing::info!("spike A dock window created, label=dock-spike-a");
     Ok("dock-spike-a".to_string())

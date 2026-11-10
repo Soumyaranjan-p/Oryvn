@@ -8,18 +8,18 @@ Run these on a real Windows 10 22H2 / 11 machine with WebView2 runtime installed
 ### Spike A: Transparent borderless dock window + hover magnification
 | # | Check | Status | Notes |
 |---|---|---|---|
-| A1 | Window is borderless (`decorations:false`) | pending manual verification | |
-| A2 | Window is transparent (`transparent:true`) | pending manual verification | |
+| A1 | Window is borderless (`decorations:false`) | **PASS** | Confirmed via tray → New Dock |
+| A2 | Window is transparent (`transparent:true`) | **PASS** | Dock renders transparent around icons |
 | A3 | Window is always-on-top (`alwaysOnTop:true`) | pending manual verification | |
 | A4 | Window does not appear in taskbar (`skipTaskbar:true`) | pending manual verification | |
-| A5 | Window does not steal focus (`focus:false`, `WS_EX_NOACTIVATE`) | pending manual verification | Clicking the dock should not activate it / steal foreground |
-| A6 | Window does not appear in Alt+Tab (`WS_EX_TOOLWINDOW`) | pending manual verification | Press Alt+Tab, confirm dock absent |
-| A7 | No flicker on show/hide or drag | pending manual verification | |
-| A8 | Shadow does not clip dock content | pending manual verification | Confirm shadow padding leaves room |
-| A9 | Mica/Acrylic background on drag | pending manual verification | Confirm vibrancy behaves acceptably when dragged |
-| A10 | Clicks pass through transparent areas | pending manual verification | Click behind the dock on transparent regions |
-| A11 | Hover magnification animation works | pending manual verification | CSS `transform: scale()` + `opacity` |
-| A12 | `html`/`body` background is transparent | pending manual verification | |
+| A5 | Window does not steal focus (`focus:false`, `WS_EX_NOACTIVATE`) | **PASS** | User confirmed, dev build, Windows 11 |
+| A6 | Window does not appear in Alt+Tab (`WS_EX_TOOLWINDOW`) | pending manual verification | |
+| A7 | No flicker on show/hide or drag | **PASS** | User confirmed |
+| A8 | Shadow does not clip dock content | **PASS** | User confirmed |
+| A9 | Mica/Acrylic background on drag | pending manual verification | |
+| A10 | Clicks pass through transparent areas | pending manual verification | |
+| A11 | Hover magnification animation works | pending manual verification | |
+| A12 | `html`/`body` background is transparent | **PASS** | Dock renders transparent |
 
 ### Spike B: Multi-monitor + WM_DISPLAYCHANGE
 | # | Check | Status | Notes |

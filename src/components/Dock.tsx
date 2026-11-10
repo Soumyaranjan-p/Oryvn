@@ -18,20 +18,18 @@ export default function Dock() {
   const enter = useCallback((id: string) => setHovered(id), []);
   const leave = useCallback(() => setHovered(null), []);
 
-  // Spring-style hover magnification via transform scale.
-  // Reduced motion: skip scale, keep opacity only.
   const itemScale = (id: string) => (hovered === id ? 1.25 : 1);
   const itemOpacity = (id: string) => (hovered === id ? 1 : 0.85);
 
   return (
     <div
-      className="fixed inset-0 pointer-events-none z-[99999]"
-      style={{ height: '100vh', width: '100vw' }}
+      className="fixed inset-0 pointer-events-none z-[99999] bg-transparent"
+      style={{ height: '100vh', width: '100vw', background: 'transparent' }}
     >
       {/* Dock bar: bottom edge, centered */}
       <div
         className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-end gap-2"
-        style={{ height: '100%' }}
+        style={{ height: '100%', background: 'transparent' }}
       >
         {DOCK_ITEMS.map((item) => (
           <div
@@ -41,15 +39,12 @@ export default function Dock() {
             onMouseLeave={leave}
           >
             <button
-              className={`w-16 h-16 rounded-2xl flex items-center justify-center text-xl transition-transform duration-200 ease-out ${
-                hovered === item.id
-                  ? 'scale-125 shadow-lg'
-                  : 'scale-100 opacity-85 hover:opacity-100'
-              }`}
+              className="w-16 h-16 rounded-2xl flex items-center justify-center text-xl transition-transform duration-200 ease-out bg-transparent"
               style={{
                 transform: `scale(${itemScale(item.id)})`,
                 opacity: itemOpacity(item.id),
                 transition: 'transform 200ms cubic-bezier(0.23, 1, 0.32, 1), opacity 200ms ease',
+                background: 'transparent',
               }}
               onMouseEnter={() => enter(item.id)}
               onMouseLeave={leave}

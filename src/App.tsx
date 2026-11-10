@@ -4,7 +4,8 @@ import Dock from './components/Dock';
 
 function isDockMode(): boolean {
   if (typeof window === 'undefined') return false;
-  return window.location.search.includes('dock=1');
+  const params = new URLSearchParams(window.location.search);
+  return params.has('dock');
 }
 
 async function createDock() {
